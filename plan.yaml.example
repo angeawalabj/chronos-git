@@ -1,0 +1,68 @@
+# ============================================================
+# Chronos-Git — Fichier de configuration de projet
+# Personnalisation absolue de la planification
+# ============================================================
+#
+# Usage :
+#   python main.py cli plan --config plan.yaml
+#   python main.py cli plan --config plan.yaml --dry-run
+# ============================================================
+
+# ── Identification du projet ──────────────────────────────────
+project: mon-challenge-30-jours
+
+# Chemin local du dépôt Git (absolu ou relatif)
+repo_path: /home/user/projects/mon-challenge
+
+# Dossier source contenant les fichiers à planifier
+# (peut être identique à repo_path ou un sous-dossier)
+source_folder: /home/user/projects/mon-challenge/scripts
+
+# Remote Git (défaut: "origin")
+remote: origin
+
+# ── Stratégie de planification ────────────────────────────────
+# Valeurs possibles : daily | weekly | custom
+strategy: daily
+
+# Date de début (format ISO 8601)
+start_date: "2026-04-01"
+
+# Nombre total de jours pour répartir les fichiers
+days: 30
+
+# Scan récursif des sous-dossiers (true/false)
+recursive: false
+
+# ── Gestion des branches ──────────────────────────────────────
+# Branche feature (créée automatiquement si inexistante)
+branch: feat/30-days-scripting-challenge
+
+# Branche de destination pour les merges
+merge_into: main
+
+# Fréquence de merge automatique
+# Valeurs : friday | monday | 6days | on_complete | manual
+merge_every: friday
+
+# ── Personnalisations par fichier (overrides) ─────────────────
+overrides:
+  # Ignorer complètement un fichier
+  - file: "draft_secret.py"
+    action: skip
+
+  # Forcer une date et un message spécifiques
+  - file: "day_01_hello_world.py"
+    date: "2026-04-01 09:30:00"
+    message: "feat: day 01 - hello world challenge start 🚀"
+
+  # Dernier fichier avec message spécial
+  - file: "day_30_final_project.py"
+    date: "2026-04-30 23:59:00"
+    message: "🏆 feat: 30-day scripting challenge COMPLETED"
+    branch: main  # Directement sur main pour ce fichier
+
+  # Fichier sur une branche spécifique
+  - file: "security_module.py"
+    message: "feat: add security hardening module"
+    branch: feat/security-improvements
