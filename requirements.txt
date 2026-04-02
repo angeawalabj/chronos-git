@@ -1,0 +1,47 @@
+# ============================================================
+# Chronos-Git — Dependencies
+# ============================================================
+
+# --- Git operations ---
+GitPython
+
+# --- CLI interface ---
+typer[all]
+rich
+
+# --- GUI interface ---
+customtkinter
+Pillow
+
+# --- Scheduling ---
+APScheduler
+
+# --- Database ---
+# sqlite3 is built-in to Python
+
+# --- Security: Secrets management ---
+keyring
+
+# --- Security: Environment variables fallback ---
+python-dotenv
+
+# --- GitHub API (Pull Requests, badges) ---
+PyGithub
+
+# --- Logging ---
+loguru
+
+# --- Config files ---
+PyYAML
+
+# --- Notifications ---
+plyer
+
+# --- File hashing (built-in hashlib, no install needed) ---
+
+# --- Testing ---
+pytest
+pytest-cov
+
+# --- Code security audit ---
+bandit
