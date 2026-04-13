@@ -28,9 +28,11 @@ from chronos.core.database import Database, Project, MergeFrequency
 from chronos.core.scanner import FolderScanner
 from chronos.core.executor import GitExecutor
 from chronos.core.catchup import CatchupEngine
+from chronos.core.task_manager import TaskManager
 from chronos.security.keyring_manager import KeyringManager
 from chronos.utils.config import ChronosConfig
 from chronos.utils.logger import get_logger
+from chronos.cli.tasks import tasks_app
 
 logger = get_logger(__name__)
 
@@ -42,6 +44,8 @@ app     = typer.Typer(
     rich_markup_mode="rich",
     add_completion=True,
 )
+# Sous-application pour la gestion fine des tâches
+app.add_typer(tasks_app, name="task")
 console = Console()
 
 # ── Dépendances globales (initialisées une seule fois) ────────────────────────

@@ -125,15 +125,22 @@ class Database:
 
     def _connect(self) -> sqlite3.Connection:
         """
-        Ouvre une connexion avec les paramètres optimaux :
-        - WAL mode : meilleure concurrence (lecture pendant écriture)
-        - Foreign keys activées
-        - Row factory pour accès par nom de colonne
+        Ouvre une connexion avec les paramètres optimaux.
+        - WAL mode     : lectures concurrentes pendant une écriture
+        - timeout 15s  : attend au lieu de lever OperationalError immédiatement
+        - busy_timeout : idem au niveau SQLite (double protection)
+        - NORMAL sync  : moins de fsync, plus rapide, toujours safe en WAL
         """
-        conn = sqlite3.connect(str(self.db_path), detect_types=sqlite3.PARSE_DECLTYPES)
+        conn = sqlite3.connect(
+            str(self.db_path),
+            detect_types=sqlite3.PARSE_DECLTYPES,
+            timeout=15,
+        )
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=15000")
         conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("PRAGMA synchronous=NORMAL")
         return conn
 
     # ── Initialisation ────────────────────────────────────────────────────
@@ -346,6 +353,10 @@ class Database:
         """
         Incrémente le compteur de tentatives et retourne la nouvelle valeur.
         Si retry_count >= MAX_RETRY, la tâche passe en FAILED automatiquement.
+
+        IMPORTANT : tout se passe dans UNE SEULE connexion pour éviter le deadlock.
+        L'ancienne version appelait update_task_status() depuis l'intérieur du
+        with self._connect() → ouvrait une 2e connexion → SQLite "database is locked".
         """
         with self._connect() as conn:
             conn.execute(
@@ -357,13 +368,15 @@ class Database:
             ).fetchone()
             count = row["retry_count"]
 
-            # Passage automatique en FAILED si trop de tentatives
+            # Passage automatique en FAILED dans LA MÊME connexion (pas d'appel récursif)
             if count >= self.MAX_RETRY:
-                self.update_task_status(
-                    task_id,
-                    TaskStatus.FAILED,
-                    f"Échec après {self.MAX_RETRY} tentatives"
-                )
+                conn.execute("""
+                    UPDATE task_queue
+                    SET status = 'FAILED',
+                        error_message = ?
+                    WHERE id = ?
+                """, (f"Échec après {self.MAX_RETRY} tentatives", task_id))
+
             return count
 
     def update_task_schedule(self, task_id: int, new_time: str, new_message: str) -> None:

@@ -98,18 +98,29 @@ class FolderScanner:
         db.insert_tasks_bulk(plan)
     """
 
-    # Extensions ignorées par défaut (fichiers système/cache)
+    # Extensions ignorées par défaut (fichiers système/cache/base de données)
     IGNORED_EXTENSIONS = {
-        ".pyc", ".pyo", ".pyd", ".so", ".dll",
-        ".DS_Store", ".Thumbs.db", ".log",
-        ".tmp", ".temp", ".bak", ".swp",
+        # Python bytecode
+        ".pyc", ".pyo", ".pyd",
+        # Bibliothèques compilées
+        ".so", ".dll", ".dylib",
+        # OS
+        ".DS_Store", ".Thumbs.db",
+        # Temporaires
+        ".log", ".tmp", ".temp", ".bak", ".swp", ".swo",
+        # SQLite (tous les fichiers WAL/SHM générés automatiquement)
+        ".db", ".db-shm", ".db-wal", ".sqlite", ".sqlite3",
+        # Archives
+        ".zip", ".tar", ".gz", ".bz2", ".xz", ".7z",
+        # Binaires
+        ".exe", ".bin", ".obj", ".o",
     }
 
     # Noms de fichiers ignorés par défaut
     IGNORED_NAMES = {
         "__pycache__", ".git", ".env", ".venv",
         "node_modules", ".idea", ".vscode",
-        "chronos.db",
+        "chronos.db", ".gitignore_bak",
     }
 
     def __init__(self, db: Database):
@@ -157,12 +168,27 @@ class FolderScanner:
             if not entry.is_file():
                 continue
 
-            # Ignorer les extensions système
+            # Ignorer les extensions système (.db, .pyc, .log, etc.)
             if entry.suffix.lower() in self.IGNORED_EXTENSIONS:
                 continue
 
-            # Ignorer les dossiers cachés/systèmes dans le chemin
-            if any(part in self.IGNORED_NAMES for part in entry.parts):
+            # Ignorer les fichiers dont le NOM EXACT est dans la liste noire
+            # (.DS_Store, __pycache__, etc.) — on teste entry.name, pas les parts du chemin
+            if entry.name in self.IGNORED_NAMES:
+                continue
+
+            # Ignorer les fichiers dans des sous-dossiers systèmes
+            # (ex: un fichier dans .git/ ou node_modules/)
+            if any(part in self.IGNORED_NAMES for part in entry.parts[:-1]):
+                continue
+
+            # Ignorer les fichiers cachés (commençant par un point) sauf .gitignore etc.
+            # On ignore les fichiers dont le nom commence par '.' et qui ne sont pas
+            # des fichiers de config courants utiles
+            KEEP_DOTFILES = {".gitignore", ".gitattributes", ".editorconfig",
+                             ".prettierrc", ".eslintrc", ".env.example",
+                             ".htaccess", ".dockerignore"}
+            if entry.name.startswith(".") and entry.name not in KEEP_DOTFILES:
                 continue
 
             files.append(entry)

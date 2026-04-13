@@ -168,14 +168,27 @@ class GitExecutor:
             return False
 
         except GitCommandError as e:
-            logger.error(f"  ❌ Erreur Git : {e}")
-            retry = self.db.increment_retry(task.id)
-            logger.warning(f"  Tentative {retry}/{Database.MAX_RETRY}")
+            # Extrait le message lisible depuis l'exception GitPython
+            git_msg = str(e).replace("\n", " ").strip()
+            logger.error(f"  ❌ Erreur Git : {git_msg[:300]}")
+            # Sauvegarde l'erreur dans la DB AVANT increment_retry
+            try:
+                self.db.update_task_status(task.id, TaskStatus.FAILED, git_msg[:500])
+            except Exception:
+                pass
+            try:
+                retry = self.db.increment_retry(task.id)
+                logger.warning(f"  Tentative {retry}/{Database.MAX_RETRY}")
+            except Exception as db_err:
+                logger.error(f"  DB increment_retry échoué : {db_err}")
             return False
 
         except Exception as e:
             logger.exception(f"  ❌ Erreur inattendue : {e}")
-            self._mark_failed(task, str(e))
+            try:
+                self._mark_failed(task, str(e)[:500])
+            except Exception as db_err:
+                logger.error(f"  DB _mark_failed échoué : {db_err}")
             return False
 
     # ── Gestion des branches ──────────────────────────────────────────────
@@ -340,7 +353,10 @@ class GitExecutor:
         GIT_COMMITTER_DATE pour que GitHub affiche la bonne date
         dans le calendrier des contributions.
 
-        Format ISO 8601 requis par Git : "2026-04-01T14:30:00"
+        Cas particulier "nothing to commit" :
+          Si git status --porcelain est vide, le fichier est déjà commité
+          ou identique à HEAD. On ne lève PAS d'exception — c'est un succès
+          silencieux (le fichier était déjà là, on marque COMPLETED quand même).
         """
         # Convertit depuis notre format DB vers le format ISO 8601 de Git
         try:
@@ -353,10 +369,21 @@ class GitExecutor:
         env["GIT_AUTHOR_DATE"]    = iso_date
         env["GIT_COMMITTER_DATE"] = iso_date
 
-        # Utilise subprocess pour passer les variables d'environnement
-        # (GitPython ne supporte pas nativement cette fonctionnalité)
+        # Vérifie d'abord que quelque chose est stagé
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=repo.working_dir,
+            capture_output=True,
+            text=True,
+        )
+        if not status.stdout.strip():
+            # Rien à committer — fichier déjà identique à HEAD ou non modifié
+            # Ce n'est PAS une erreur : on considère que c'est déjà fait
+            logger.info(f"  ℹ️  Rien à committer pour ce fichier (déjà dans l'index).")
+            return  # Pas d'exception → execute_task marquera COMPLETED
+
         result = subprocess.run(
-            ["git", "commit", "-m", message, "--allow-empty-message"],
+            ["git", "commit", "-m", message],
             cwd=repo.working_dir,
             env=env,
             capture_output=True,
@@ -364,7 +391,10 @@ class GitExecutor:
         )
 
         if result.returncode != 0:
-            raise GitCommandError("git commit", result.returncode, result.stderr)
+            # Loggue le vrai message Git (stdout + stderr) pour le diagnostic
+            git_output = (result.stdout + result.stderr).strip()
+            logger.error(f"  git commit stdout/stderr : {git_output[:500]}")
+            raise GitCommandError("git commit", result.returncode, git_output)
 
     def _push(self, repo: Repo, branch_name: str) -> None:
         """

@@ -28,6 +28,7 @@ from chronos.core.scanner import FolderScanner
 from chronos.core.executor import GitExecutor
 from chronos.core.catchup import CatchupEngine, CatchupReport
 from chronos.security.keyring_manager import KeyringManager
+from chronos.gui.task_editor import TaskEditorPanel
 from chronos.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -156,6 +157,7 @@ class ChronosApp(ctk.CTk):
         # Boutons de navigation
         nav_items = [
             ("dashboard", "📊  Dashboard",    "dashboard"),
+            ("tasks",     "🗂️   Mes Tâches",   "tasks"),
             ("planner",   "📅  Planifier",     "planner"),
             ("drift",     "👁️   Dérive",        "drift"),
             ("logs",      "📋  Journaux",      "logs"),
@@ -218,6 +220,7 @@ class ChronosApp(ctk.CTk):
 
         # Construit tous les frames
         self._frames["dashboard"] = self._build_dashboard()
+        self._frames["tasks"]     = TaskEditorPanel(self.content, self.db)
         self._frames["planner"]   = self._build_planner()
         self._frames["drift"]     = self._build_drift()
         self._frames["logs"]      = self._build_logs()
@@ -248,6 +251,8 @@ class ChronosApp(ctk.CTk):
         # Rafraîchit les données si nécessaire
         if name == "dashboard":
             self._refresh_dashboard()
+        elif name == "tasks":
+            self._frames["tasks"]._refresh()
         elif name == "logs":
             self._refresh_logs()
 
@@ -825,41 +830,118 @@ class ChronosApp(ctk.CTk):
     # ── Logs ──────────────────────────────────────────────────────────────
 
     def _build_logs(self) -> ctk.CTkFrame:
-        """Construit l'interface des journaux d'exécution."""
+        """Construit l'interface des journaux d'exécution — version complète."""
         frame = ctk.CTkFrame(self.content, fg_color="transparent")
 
-        ctk.CTkLabel(
-            frame,
-            text="Journaux d'exécution",
-            font=ctk.CTkFont(size=28, weight="bold"),
-            text_color=COLORS["text_primary"],
-        ).pack(anchor="w", pady=(0, 20))
+        # En-tête + contrôles
+        hdr = ctk.CTkFrame(frame, fg_color="transparent")
+        hdr.pack(fill="x", pady=(0, 10))
 
+        ctk.CTkLabel(hdr, text="Journaux d'exécution",
+                     font=ctk.CTkFont(size=24, weight="bold"),
+                     text_color=COLORS["text_primary"],
+                     ).pack(side="left")
+
+        # Sélecteur de projet pour les logs
+        self._log_proj_var = ctk.StringVar(value="Tous les projets")
+        projects = self.db.get_all_projects()
+        proj_options = ["Tous les projets"] + [f"[{p.id}] {p.name}" for p in projects]
+        self._log_proj_menu = ctk.CTkOptionMenu(
+            hdr, values=proj_options,
+            variable=self._log_proj_var,
+            fg_color=COLORS["bg_card"], width=200,
+            command=lambda _: self._refresh_logs(),
+        )
+        self._log_proj_menu.pack(side="right", padx=(10, 0))
+
+        ctk.CTkButton(hdr, text="↻  Actualiser", width=110,
+                      fg_color=COLORS["bg_card"], hover_color=COLORS["border"],
+                      command=self._refresh_logs,
+                      ).pack(side="right")
+
+        # Filtre : erreurs seulement
+        self._log_errors_only = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(hdr, text="Erreurs seulement",
+                        variable=self._log_errors_only,
+                        text_color=COLORS["accent_red"],
+                        font=ctk.CTkFont(size=11),
+                        command=self._refresh_logs,
+                        ).pack(side="right", padx=10)
+
+        # Zone de texte avec couleurs par type
         self._logs_textbox = ctk.CTkTextbox(
             frame,
             fg_color=COLORS["bg_secondary"],
-            text_color=COLORS["accent_green"],
+            text_color=COLORS["text_primary"],
             font=ctk.CTkFont(family="Courier", size=11),
             corner_radius=8,
+            wrap="word",
         )
         self._logs_textbox.pack(fill="both", expand=True)
+
+        # Tags de couleur pour différencier les types de logs
+        self._logs_textbox.tag_config("ok",      foreground=COLORS["accent_green"])
+        self._logs_textbox.tag_config("error",   foreground=COLORS["accent_red"])
+        self._logs_textbox.tag_config("warning", foreground=COLORS["accent_orange"])
+        self._logs_textbox.tag_config("info",    foreground=COLORS["text_secondary"])
+        self._logs_textbox.tag_config("date",    foreground=COLORS["text_dim"])
 
         return frame
 
     def _refresh_logs(self):
-        """Charge les logs récents depuis la DB."""
+        """Charge les logs récents depuis la DB avec filtres."""
+        import sqlite3
+
+        # Détermine le(s) projet(s) à afficher
+        sel = self._log_proj_var.get() if hasattr(self, "_log_proj_var") else "Tous les projets"
+        errors_only = self._log_errors_only.get() if hasattr(self, "_log_errors_only") else False
+
         projects = self.db.get_all_projects()
+        if sel != "Tous les projets":
+            try:
+                pid = int(sel.split("]")[0].replace("[", ""))
+                projects = [p for p in projects if p.id == pid]
+            except (ValueError, IndexError):
+                pass
+
+        # Collecte et trie tous les logs
+        all_logs = []
+        for project in projects:
+            logs = self.db.get_recent_logs(project.id, limit=100)
+            for log in logs:
+                all_logs.append((project.name, log))
+
+        # Trie par timestamp décroissant
+        all_logs.sort(key=lambda x: x[1].timestamp, reverse=True)
+
+        if errors_only:
+            all_logs = [(pn, l) for pn, l in all_logs if not l.success]
+
+        # Affiche
+        self._logs_textbox.configure(state="normal")
         self._logs_textbox.delete("1.0", "end")
 
-        for project in projects:
-            logs = self.db.get_recent_logs(project.id, limit=20)
-            for log in logs:
-                icon = "✅" if log.success else "❌"
-                line = (
-                    f"{icon} [{log.timestamp[:19]}] "
-                    f"{log.action.upper():20} | {log.detail[:80]}\n"
-                )
-                self._logs_textbox.insert("end", line)
+        if not all_logs:
+            self._logs_textbox.insert("end", "Aucun log disponible.\n", "info")
+        else:
+            for proj_name, log in all_logs[:200]:  # max 200 lignes
+                # Date
+                self._logs_textbox.insert("end", f"[{log.timestamp[:19]}] ", "date")
+                # Icône + statut
+                if log.success:
+                    self._logs_textbox.insert("end", "✅ ", "ok")
+                else:
+                    self._logs_textbox.insert("end", "❌ ", "error")
+                # Action
+                self._logs_textbox.insert("end", f"{log.action:<18} ", "warning")
+                # Projet
+                self._logs_textbox.insert("end", f"[{proj_name[:15]}] ", "info")
+                # Détail COMPLET (pas tronqué à 80 chars !)
+                detail = log.detail.replace("\n", " ").strip()
+                tag = "ok" if log.success else "error"
+                self._logs_textbox.insert("end", f"{detail}\n", tag)
+
+        self._logs_textbox.configure(state="disabled")
 
     # ── Settings ──────────────────────────────────────────────────────────
 
