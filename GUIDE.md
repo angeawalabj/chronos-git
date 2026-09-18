@@ -15,7 +15,7 @@
 ### 1. Cloner le dépôt
 
 ```bash
-git clone https://github.com/yourname/chronos-git.git
+git clone https://github.com/angeawalabj/chronos-git.git
 cd chronos-git
 ```
 

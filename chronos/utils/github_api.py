@@ -265,7 +265,7 @@ class GitHubAPI:
         date_str = datetime.now().strftime("%Y-%m-%d")
         lines = [
             f"# Changelog — {date_str}",
-            f"\n> Généré automatiquement par [Chronos-Git](https://github.com/yourname/chronos-git)",
+            f"\n> Généré automatiquement par [Chronos-Git](https://github.com/angeawalabj/chronos-git)",
             f"\n## [{date_str}] — {branch_name}\n",
         ]
 
@@ -354,7 +354,7 @@ Créée le {date_str} par **Chronos-Git** — Git Lifecycle Orchestrator.
 
 ## 🔗 Liens
 
-- [Chronos-Git](https://github.com/yourname/chronos-git) — L'outil qui a créé cette PR
+- [Chronos-Git](https://github.com/angeawalabj/chronos-git) — L'outil qui a créé cette PR
 
 ---
 *Cette Pull Request a été créée automatiquement. Les commits sont réels et vérifiés.*

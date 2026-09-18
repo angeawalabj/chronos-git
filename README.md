@@ -3,9 +3,10 @@
 > **"The architect who codes while thinking."**
 > *A solution to forgetting. A system for discipline.*
 
+[![CI](https://github.com/angeawalabj/chronos-git/actions/workflows/ci.yml/badge.svg)](https://github.com/angeawalabj/chronos-git/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python)](https://python.org)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Security](https://img.shields.io/badge/Security-GPG%20Signed-red?style=for-the-badge)](docs/SECURITY.md)
+[![Security](https://img.shields.io/badge/Security-GPG%20Signed-red?style=for-the-badge)](SECURITY.md)
 
 ---
 
@@ -75,7 +76,7 @@ chronos-git/
 ### Installation
 
 ```bash
-git clone https://github.com/yourusername/chronos-git.git
+git clone https://github.com/angeawalabj/chronos-git.git
 cd chronos-git
 pip install -r requirements.txt
 
@@ -124,7 +125,7 @@ overrides:
 
 ## 🛡️ Security
 
-See [docs/SECURITY.md](docs/SECURITY.md) for the complete threat model.
+See [SECURITY.md](SECURITY.md) for the complete threat model.
 
 **Key principles:**
 - ✅ GitHub tokens stored in OS Keyring (Windows Credential Manager / macOS Keychain / Linux Secret Service)
@@ -134,6 +135,16 @@ See [docs/SECURITY.md](docs/SECURITY.md) for the complete threat model.
 - ✅ Path traversal protection via `pathlib`
 - ✅ Kill switch (emergency stop all scheduled tasks)
 - ✅ `Gitleaks` audit before first push
+
+---
+
+## 🧪 Tests
+
+```bash
+pytest tests/ -v --cov=chronos --cov-report=term-missing
+```
+
+60 tests unitaires couvrant les modules `core` (scheduler, catch-up, drift) et `TaskManager`. Voir [.github/workflows/ci.yml](.github/workflows/ci.yml).
 
 ---
 
